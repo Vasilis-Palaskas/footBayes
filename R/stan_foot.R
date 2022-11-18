@@ -207,6 +207,7 @@ stan_foot <- function(data,
                       dynamic_type,
                       prior,
                       prior_sd,
+                      ind_home = "TRUE",
                       ...){
 
     ## DATA CHECKS
@@ -517,7 +518,21 @@ stan_foot <- function(data,
     ranking[,1] <- ranking$rank_team[team_order]
     ranking[,2] <- ranking$points[team_order]
     ranking[,2] <- (as.numeric(as.vector(ranking[,2]))-mean(as.numeric(as.vector(ranking[,2]))))/(2*sd(as.numeric(as.vector(ranking[,2]))))
-    }
+  }
+
+  ## HOME EFFECT CKECK
+
+  home_names <- c("TRUE", "FALSE")
+  ind_home <- match.arg(ind_home, home_names)
+
+   if (missing(ind_home)){
+     ind_home = "TRUE"
+   }else{
+     ind_home = ind_home
+   }
+
+  ind_home <- 0*(ind_home=="FALSE") + 1*(ind_home =="TRUE")
+
 
 
 
@@ -541,7 +556,8 @@ stan_foot <- function(data,
                 hyper_sd_location=hyper_sd_location,
                 hyper_sd_scale=hyper_sd_scale,
                 ranking = ranking[,2],
-                nu = user_dots$nu)
+                nu = user_dots$nu,
+                ind_home = ind_home)
 
   if (!missing(dynamic_type)){
     data_stan$ntimes <- ntimes
@@ -1309,6 +1325,7 @@ stan_foot <- function(data,
       int time[ntimes];
       int instants[N];
       real ranking[nteams];
+      int<lower=0, upper=1> ind_home;
 
       // priors part
       int<lower=1,upper=4> prior_dist_num;    // 1 gaussian, 2 t, 3 cauchy, 4 laplace
@@ -1374,7 +1391,7 @@ stan_foot <- function(data,
 
 
       for (n in 1:N){
-        theta_home[n] = exp(home+att[instants[n], team1[n]]+def[instants[n], team2[n]]+
+        theta_home[n] = exp(home*ind_home + att[instants[n], team1[n]]+def[instants[n], team2[n]]+
                          (gamma/2)*(ranking[team1[n]]-ranking[team2[n]]));
         theta_away[n] = exp(att[instants[n], team2[n]]+def[instants[n], team1[n]]-
                          (gamma/2)*(ranking[team1[n]]-ranking[team2[n]]));
@@ -1528,6 +1545,7 @@ data{
   int instants[N];
   int instants_prev[N_prev];
   real ranking[nteams];
+  int<lower=0, upper=1> ind_home;
 
   // priors part
   int<lower=1,upper=4> prior_dist_num;    // 1 gaussian, 2 t, 3 cauchy, 4 laplace
@@ -1593,7 +1611,7 @@ transformed parameters{
 
 
   for (n in 1:N){
-    theta_home[n] = exp(home+att[instants[n], team1[n]]+def[instants[n], team2[n]]+
+    theta_home[n] = exp(home*ind_home+att[instants[n], team1[n]]+def[instants[n], team2[n]]+
                           (gamma/2)*(ranking[team1[n]]-ranking[team2[n]]));
     theta_away[n] = exp(att[instants[n], team2[n]]+def[instants[n], team1[n]]-
                           (gamma/2)*(ranking[team1[n]]-ranking[team2[n]]));
@@ -1689,7 +1707,7 @@ generated quantities{
   }
   // out-of-sample predictions
   for (n in 1:N_prev){
-    theta_home_prev[n] = exp(home+att[instants_prev[n], team1_prev[n]]+
+    theta_home_prev[n] = exp(home*ind_home+att[instants_prev[n], team1_prev[n]]+
                                def[instants_prev[n], team2_prev[n]]+
                                (gamma/2)*(ranking[team1_prev[n]]-ranking[team2_prev[n]]));
     theta_away_prev[n] = exp(att[instants_prev[n], team2_prev[n]]+
